@@ -7,10 +7,10 @@ interface WebPushSDKOptions {
 }
 
 interface Configuration {
-  applicationServerKey: string;
-  ask: "hard" | "soft" | "custom";
-  askSelector?: string;
-  askEvent?: "click" | "hover" | string;
+  ApplicationServerKey: string;
+  Ask: "hard" | "soft" | "custom";
+  AskSelector?: string;
+  AskEvent?: "click" | "hover" | string;
 }
 class WebPushSDK {
   options: WebPushSDKOptions;
@@ -49,7 +49,7 @@ class WebPushSDK {
   private async initialize() {
     const configuration = await this.getConfigurations();
 
-    switch (configuration.ask) {
+    switch (configuration.Ask) {
       case "hard":
         this.handlePushNotifications();
         return;
@@ -61,14 +61,14 @@ class WebPushSDK {
         return;
       case "custom":
       default:
-        if (!configuration.askSelector || !configuration.askEvent) {
+        if (!configuration.AskSelector || !configuration.AskEvent) {
           throw new Error(
-            "$options.askSelector or $options.askEvent is required in custom ask."
+            "$options.AskSelector or $options.AskEvent is required in custom Ask."
           );
         }
         subscribe(
-          configuration.askSelector,
-          configuration.askEvent,
+          configuration.AskSelector,
+          configuration.AskEvent,
           this.handlePushNotifications.bind(this)
         );
         return;
@@ -85,7 +85,7 @@ class WebPushSDK {
     const registration = await navigator.serviceWorker.ready;
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: configuration.applicationServerKey,
+      applicationServerKey: configuration.ApplicationServerKey,
     });
     const body = {
       subscription,
