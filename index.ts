@@ -12,6 +12,10 @@ interface Configuration {
   AskSelector?: string;
   AskEvent?: "click" | "hover" | string;
 }
+
+interface UserInformation {
+  isSubscribed: boolean;
+}
 class WebPushSDK {
   options: WebPushSDKOptions;
   private configuration: Configuration | null = null;
@@ -46,17 +50,47 @@ class WebPushSDK {
     return this.configuration;
   }
 
+  async getUserInformation(): Promise<UserInformation> {
+    const response = await fetch(
+      `http://localhost:8080/users/${this.options.userID}`
+    );
+
+    return await response.json();
+  }
+
   private async initialize() {
+    if (Notification.permission === "denied") {
+      // Handle deny case.. maybe show a modal informing how can allow information
+      // Should be configured through dashboard
+      console.error('WebPushSDK:Notification is denied.')
+      return;
+    }
+
+    const userInformation = await this.getUserInformation();
+
+
+    if(Notification.permission === 'granted' && userInformation.isSubscribed === true){
+        console.log('WebPushSDK: All good!')
+        return;
+    }
+
+    if (Notification.permission === 'granted' && userInformation.isSubscribed === false) {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      subscription ? this.storeSubscription(subscription) : this.handlePushNotifications()
+      return;
+    }
+
     const configuration = await this.getConfigurations();
 
     switch (configuration.Ask) {
       case "hard":
-        this.handlePushNotifications();
+        this.subscribe();
         return;
       case "soft":
         showConfirmationModal(
           "Do you want to enable push notifications?",
-          this.handlePushNotifications.bind(this)
+          this.subscribe.bind(this)
         );
         return;
       case "custom":
@@ -69,24 +103,18 @@ class WebPushSDK {
         subscribe(
           configuration.AskSelector,
           configuration.AskEvent,
-          this.handlePushNotifications.bind(this)
+          this.subscribe.bind(this)
         );
         return;
     }
   }
 
-  public async subscribe() {
+  async subscribe() {
+    await this.registerServiceWorker();
     await this.handlePushNotifications();
   }
 
-  private async handlePushNotifications() {
-    const configuration = await this.getConfigurations();
-    await this.registerServiceWorker();
-    const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: configuration.ApplicationServerKey,
-    });
+  private async storeSubscription(subscription: PushSubscription) {
     const body = {
       subscription,
       userID: this.options.userID || crypto.randomUUID(),
@@ -96,6 +124,16 @@ class WebPushSDK {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+  }
+
+  private async handlePushNotifications() {
+    const configuration = await this.getConfigurations();
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: configuration.ApplicationServerKey,
+    });
+    await this.storeSubscription(subscription)
   }
   private async registerServiceWorker() {
     if ("serviceWorker" in navigator) {
